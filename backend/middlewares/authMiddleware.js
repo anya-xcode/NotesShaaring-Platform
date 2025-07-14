@@ -1,5 +1,4 @@
 const jwt = require("jsonwebtoken");
-
 const protect = (req, res, next) => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
   if (!token) {
@@ -19,7 +18,6 @@ const protect = (req, res, next) => {
     res.status(401).json({ message: "Invalid token" });
   }
 };
-
 module.exports = protect;
 
 

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Star, Send, Loader2 } from 'lucide-react';
-
 const API_BASE_URL = 'http://localhost:3000/api';
-
 const ReviewForm = ({ noteId, existingReview, refreshReviews }) => {
   const [comment, setComment] = useState('');
   const [rating, setRating] = useState('');
@@ -130,5 +128,4 @@ const ReviewForm = ({ noteId, existingReview, refreshReviews }) => {
     </form>
   );
 };
-
 export default ReviewForm;

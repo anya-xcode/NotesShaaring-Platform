@@ -274,7 +274,6 @@ router.post("/reset-password/:token", async (req, res) => {
   }
 });
 
-// Public stats endpoint for homepage
 router.get("/public-stats", async (req, res) => {
   try {
     const [userCount, noteCount, reviews] = await Promise.all([

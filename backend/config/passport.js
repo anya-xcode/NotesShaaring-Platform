@@ -19,21 +19,17 @@ module.exports = function () {
           if (!email) {
             return done(null, false, { message: 'Email not found in Google profile.' });
           }
-
           let user = await User.findOne({ email });
-
           if (state === 'signup') {
             if (!user) {
               const generatedUsername =
                 profile.displayName.toLowerCase().replace(/\s+/g, '') + Date.now();
-
               user = await User.create({
                 googleId: profile.id,
                 name: profile.displayName,
                 email,
                 username: generatedUsername, 
               });
-
               user._alreadyExists = false;
             } else {
               user._alreadyExists = true;
@@ -50,7 +46,6 @@ module.exports = function () {
               await user.save();
             }
           }
-
           return done(null, user);
         } catch (err) {
           console.error('Google OAuth Error:', err);

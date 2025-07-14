@@ -1,5 +1,4 @@
 const User = require("../models/User");
-
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user?.userId;

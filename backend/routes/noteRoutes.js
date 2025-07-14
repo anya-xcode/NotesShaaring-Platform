@@ -7,14 +7,15 @@ const Review = require("../models/Review");
 const path = require("path");
 const fs = require("fs");
 const { estimateDifficulty } = require("../utils/difficultyEstimator");
-const { getRelatedVideos } = require("../utils/youtubeApi");
-const { getRelatedArticles } = require("../utils/googleSearchApi");
+const summarizeText = require("../utils/summarizer");
+const youtubeApi = require('../utils/youtubeApi');
+const googleSearchApi = require('../utils/googleSearchApi');
 
-// Upload a note
+
 router.post("/", protect, upload.single("file"), async (req, res) => {
   try {
-    const { title, subject, description, difficulty } = req.body;
-    console.log("Received difficulty:", difficulty);
+    const { title, subject, description, difficulty: incomingDifficulty } = req.body;
+    console.log("Received difficulty:", incomingDifficulty);
 
     if (!req.file || !title || !subject) {
       return res
@@ -24,17 +25,30 @@ router.post("/", protect, upload.single("file"), async (req, res) => {
 
     const fileUrl = req.file.secure_url || req.file.url || req.file.path;
 
-    let finalDifficulty = difficulty;
-    if (
-      !finalDifficulty ||
-      !["Basic", "Intermediate", "Advanced"].includes(finalDifficulty)
-    ) {
-      const est = estimateDifficulty({ title, description });
-      if (est === "Easy") finalDifficulty = "Basic";
-      else if (est === "Medium") finalDifficulty = "Intermediate";
-      else if (est === "Hard") finalDifficulty = "Advanced";
-      else finalDifficulty = undefined;
+    function mapDifficulty(level) {
+      if (level === "Easy") return "Basic";
+      if (level === "Medium") return "Intermediate";
+      if (level === "Hard") return "Advanced";
+      return level;
     }
+
+    let finalDifficulty = incomingDifficulty;
+    if (!finalDifficulty) {
+      finalDifficulty = estimateDifficulty({ title, description });
+    }
+    finalDifficulty = mapDifficulty(finalDifficulty);
+
+
+    let summary = "";
+try {
+  // Removed verbose logging for production
+  summary = await summarizeText(fileUrl);
+} catch (summaryErr) {
+  // Optionally keep error logging, but remove summary content
+  console.error("[AI SUMMARY] Error generating summary:", summaryErr);
+  summary = "Summary not available";
+}
+
 
     const newNote = new Note({
       title,
@@ -46,6 +60,7 @@ router.post("/", protect, upload.single("file"), async (req, res) => {
       downloadCount: 0,
       likedBy: [],
       difficulty: finalDifficulty,
+      summary,
     });
 
     await newNote.save();
@@ -54,13 +69,15 @@ router.post("/", protect, upload.single("file"), async (req, res) => {
       message: "Note uploaded successfully",
       note: newNote,
     });
-  } catch (err) {
-    console.error("Upload error:", err);
-    res.status(500).json({ message: "Server error while uploading note" });
-  }
+ } catch (error) {
+  console.error('🔥 FULL ERROR:', error);
+  console.error('🔥 STACK TRACE:', error.stack);
+  res.status(500).json({ error: error.message || 'Internal Server Error' });
+}
+
 });
 
-// Fetch all notes
+
 router.get("/", async (req, res) => {
   try {
     const notes = await Note.find()
@@ -85,13 +102,14 @@ router.get("/", async (req, res) => {
     });
 
     res.status(200).json({ notes: notesWithExtras });
-  } catch (err) {
-    console.error("Fetch notes error:", err);
-    res.status(500).json({ message: "Failed to fetch notes" });
-  }
+  } catch (error) {
+  console.error('🔥 FULL ERROR:', error);
+  console.error('🔥 STACK TRACE:', error.stack);
+  res.status(500).json({ error: error.message || 'Internal Server Error' });
+}
+
 });
 
-// Fetch user's favorite notes
 router.get("/favorites", protect, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -100,13 +118,15 @@ router.get("/favorites", protect, async (req, res) => {
       .populate("uploadedBy", "username email");
 
     res.status(200).json(notes);
-  } catch (err) {
-    console.error("Fetch favorites error:", err);
-    res.status(500).json({ message: "Failed to fetch favorites" });
-  }
+  } catch (error) {
+  console.error('🔥 FULL ERROR:', error);
+  console.error('🔥 STACK TRACE:', error.stack);
+  res.status(500).json({ error: error.message || 'Internal Server Error' });
+}
+
 });
 
-// Get a single note
+
 router.get("/:id", async (req, res) => {
   try {
     const note = await Note.findById(req.params.id).populate(
@@ -115,13 +135,15 @@ router.get("/:id", async (req, res) => {
     );
     if (!note) return res.status(404).json({ message: "Note not found" });
     res.status(200).json({ note });
-  } catch (err) {
-    console.error("Fetch single note error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
+  } catch (error) {
+  console.error('🔥 FULL ERROR:', error);
+  console.error('🔥 STACK TRACE:', error.stack);
+  res.status(500).json({ error: error.message || 'Internal Server Error' });
+}
+
 });
 
-// Track downloads
+
 router.put("/:id/download", protect, async (req, res) => {
   try {
     const note = await Note.findById(req.params.id);
@@ -142,7 +164,7 @@ router.put("/:id/download", protect, async (req, res) => {
   }
 });
 
-// Like or unlike a note
+
 router.put("/:id/like", protect, async (req, res) => {
   try {
     const note = await Note.findById(req.params.id);
@@ -170,7 +192,7 @@ router.put("/:id/like", protect, async (req, res) => {
   }
 });
 
-// Add to favorites
+
 router.post("/:id/favorite", protect, async (req, res) => {
   try {
     const note = await Note.findById(req.params.id);
@@ -193,7 +215,7 @@ router.post("/:id/favorite", protect, async (req, res) => {
   }
 });
 
-// Remove from favorites
+
 router.delete("/:id/favorite", protect, async (req, res) => {
   try {
     const note = await Note.findById(req.params.id);
@@ -216,7 +238,7 @@ router.delete("/:id/favorite", protect, async (req, res) => {
   }
 });
 
-// Delete a note
+
 router.delete("/:id", protect, async (req, res) => {
   try {
     const note = await Note.findById(req.params.id);
@@ -236,7 +258,7 @@ router.delete("/:id", protect, async (req, res) => {
   }
 });
 
-// Edit a note
+
 router.patch("/:id", protect, upload.single("file"), async (req, res) => {
   try {
     const note = await Note.findById(req.params.id);
@@ -262,7 +284,7 @@ router.patch("/:id", protect, upload.single("file"), async (req, res) => {
   }
 });
 
-// Download file
+
 router.get("/:id/download-file", protect, async (req, res) => {
   try {
     const note = await Note.findById(req.params.id);
@@ -293,40 +315,52 @@ router.get("/:id/download-file", protect, async (req, res) => {
 });
 
 // Get related YouTube videos for a note
-router.get("/:id/related-videos", async (req, res) => {
+router.get('/:id/related-videos', async (req, res) => {
   try {
     const note = await Note.findById(req.params.id);
-    if (!note) {
-      return res.status(404).json({ message: "Note not found" });
-    }
-
-    const relatedVideos = await getRelatedVideos(note);
-    
-    res.status(200).json({
-      message: "Related videos fetched successfully",
-      data: relatedVideos
-    });
+    if (!note) return res.status(404).json({ message: 'Note not found' });
+    const result = await youtubeApi.getRelatedVideos(note);
+    res.json({ data: result });
   } catch (err) {
-    console.error("Fetch related videos error:", err);
-    res.status(500).json({ message: "Server error while fetching related videos" });
+    console.error('Error fetching related videos:', err);
+    res.status(500).json({ message: 'Failed to fetch related videos' });
   }
 });
 
-// Fetch related articles for a note
-router.get("/:id/related-articles", async (req, res) => {
+// Get related articles for a note
+router.get('/:id/related-articles', async (req, res) => {
   try {
     const note = await Note.findById(req.params.id);
-    if (!note) return res.status(404).json({ message: "Note not found" });
+    if (!note) return res.status(404).json({ message: 'Note not found' });
+    const result = await googleSearchApi.getRelatedArticles(note);
+    res.json({ data: result });
+  } catch (err) {
+    console.error('Error fetching related articles:', err);
+    res.status(500).json({ message: 'Failed to fetch related articles' });
+  }
+});
 
-    const relatedArticles = await getRelatedArticles(note);
-    res.status(200).json({
-      message: "Related articles fetched successfully",
-      data: relatedArticles,
+// Get both related videos and articles for a note (suggestions)
+router.get('/:id/suggestions', async (req, res) => {
+  try {
+    const note = await Note.findById(req.params.id);
+    if (!note) return res.status(404).json({ message: 'Note not found' });
+    const [videosResult, articlesResult] = await Promise.all([
+      youtubeApi.getRelatedVideos(note),
+      googleSearchApi.getRelatedArticles(note)
+    ]);
+    res.json({
+      keywords: videosResult.keywords || articlesResult.keywords || [],
+      videos: videosResult.videos || [],
+      articles: articlesResult.articles || []
     });
   } catch (err) {
-    console.error("Fetch related articles error:", err);
-    res.status(500).json({ message: "Server error while fetching related articles" });
+    console.error('Error fetching suggestions:', err);
+    res.status(500).json({ message: 'Failed to fetch suggestions' });
   }
 });
 
 module.exports = router;
+
+
+

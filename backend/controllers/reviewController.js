@@ -1,5 +1,4 @@
 const Review = require("../models/Review");
-
 const createOrUpdateReview = async (req, res) => {
   const { comment, rating } = req.body;
   const userId = req.user.userId;
@@ -55,14 +54,12 @@ const getReviewsForNote = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 const deleteReview = async (req, res) => {
   try {
     const review = await Review.findOneAndDelete({
       user: req.user.userId,
       note: req.params.noteId,
     });
-
     if (!review) return res.status(404).json({ message: "Review not found" });
 
     res.json({ message: "Review deleted" });
@@ -70,7 +67,6 @@ const deleteReview = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 module.exports = {
   createOrUpdateReview,
   getReviewsForNote,

@@ -83,6 +83,8 @@ const NotesBrowsingPage = () => {
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [summaryContent, setSummaryContent] = useState("");
   const [selectedDifficulty, setSelectedDifficulty] = useState('');
+  const NOTES_PER_PAGE = 8; 
+
 
   const fetchNotes = useCallback(async () => {
     try {
@@ -95,8 +97,6 @@ const NotesBrowsingPage = () => {
       
      
       let filteredNotes = allNotesFetched;
-      
-      // Filter by search term
       if (searchTerm) {
         filteredNotes = filteredNotes.filter(note => 
           note.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -104,15 +104,11 @@ const NotesBrowsingPage = () => {
           note.subject.toLowerCase().includes(searchTerm.toLowerCase())
         );
       }
-      
-      // Filter by subject
       if (selectedSubject !== 'All Subjects') {
         filteredNotes = filteredNotes.filter(note => 
           note.subject === selectedSubject
         );
       }
-
-      // Filter by difficulty if selected
       if (sortBy === 'difficulty' && selectedDifficulty) {
         filteredNotes = filteredNotes.filter(note => note.difficulty === selectedDifficulty);
       }
@@ -131,21 +127,25 @@ const NotesBrowsingPage = () => {
             return (b.reviewCount || 0) - (a.reviewCount || 0);
           case 'title':
             return a.title.localeCompare(b.title);
-          // No default sort for difficulty
           default:
             return 0;
         }
       });
       
-      setNotes(filteredNotes);
-      setTotalPages(1);
+      const total = filteredNotes.length;
+setTotalPages(Math.ceil(total / NOTES_PER_PAGE));
+const startIndex = (currentPage - 1) * NOTES_PER_PAGE;
+const paginatedNotes = filteredNotes.slice(startIndex, startIndex + NOTES_PER_PAGE);
+setNotes(paginatedNotes);
+
     } catch (error) {
       console.error('Error fetching notes:', error);
       setError('Failed to load notes. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, selectedSubject, sortBy, selectedDifficulty]);
+  }, [searchTerm, selectedSubject, sortBy, selectedDifficulty, currentPage]);
+
 
   const fetchCurrentUser = useCallback(async () => {
     try {
@@ -183,7 +183,8 @@ const NotesBrowsingPage = () => {
     fetchNotes();
     fetchFavorites();
     fetchCurrentUser();
-  }, [fetchNotes, fetchFavorites, fetchCurrentUser]);
+ }, [fetchNotes, fetchFavorites, fetchCurrentUser, currentPage]);
+
 
   const handleDownload = async (noteId) => {
     try {
@@ -249,8 +250,6 @@ const NotesBrowsingPage = () => {
       await axios.delete(`${API_BASE_URL}/notes/${noteId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-
-      // Remove from local state
       setNotes(prev => prev.filter(note => note._id !== noteId));
     } catch (error) {
       console.error('Error deleting note:', error);
@@ -346,7 +345,6 @@ const NotesBrowsingPage = () => {
   return (
     <div className="min-h-screen bg-background py-8 px-4">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="mb-8 animate-slide-up">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
             Browse Notes
@@ -355,8 +353,6 @@ const NotesBrowsingPage = () => {
             Discover and download high-quality study materials from the community
           </p>
         </div>
-
-        {/* Search and Filters */}
         <div className="card-interactive p-6 mb-8 animate-slide-up" style={{ animationDelay: '100ms' }}>
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1">
@@ -402,7 +398,6 @@ const NotesBrowsingPage = () => {
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
-                {/* Show secondary dropdown if Difficulty Level is selected */}
                 {sortBy === 'difficulty' && (
                   <select
                     value={selectedDifficulty}
@@ -456,7 +451,6 @@ const NotesBrowsingPage = () => {
                       {note.subject}
                     </span>
                     <div className="flex gap-2 items-center">
-                      {/* Difficulty Badge */}
                       {note.difficulty && (
                         <span
                           className={`px-2 py-1 border text-xs font-semibold rounded-full shadow-sm ${difficultyBadgeStyles[mapDifficulty(note.difficulty)] || 'bg-gray-100 text-gray-600 border-gray-300'}`}
@@ -525,8 +519,6 @@ const NotesBrowsingPage = () => {
                       <span>{note.averageRating > 0 ? note.averageRating.toFixed(1) : 'No ratings yet'}</span>
                     </div>
                   </div>
-
-                  {/* Action Buttons Layout */}
                   <div className="flex flex-col gap-2 mt-2">
                     <div className="flex gap-2">
                       <button
@@ -554,8 +546,6 @@ const NotesBrowsingPage = () => {
                 </div>
               ))}
             </div>
-
-            {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex justify-center mt-8 animate-slide-up" style={{ animationDelay: '400ms' }}>
                 <div className="flex items-center space-x-2">
@@ -594,7 +584,6 @@ const NotesBrowsingPage = () => {
           </>
         )}
       </div>
-      {/* Summary Modal */}
       {showSummaryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
           <div className="bg-white dark:bg-background rounded-lg shadow-lg max-w-lg w-full p-6 relative animate-fade-in">
